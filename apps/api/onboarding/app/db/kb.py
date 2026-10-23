@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import ColumnElement, Select, Text, cast, delete, func, select
+from sqlalchemy import ColumnElement, Select, Text, cast, delete, func, select, text
 from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +37,7 @@ class PostgresKnowledgeBase:
         self._database = database
         self._embedder = embedder
         self._overfetch = overfetch
+        self._bm25: bool | None = None
 
     async def search(self, query: SearchQuery) -> tuple[ScoredChunk, ...]:
         if not query.text.strip():
@@ -46,9 +47,14 @@ class PostgresKnowledgeBase:
         except Exception as error:
             raise KnowledgeUnavailableError(f"embedding failed: {error}") from error
         async with self._database.session() as session:
+            if self._bm25 is None:
+                self._bm25 = await _has_bm25(session)
             semantic = await _semantic_ids(session, query, vector, self._overfetch)
             lexical = await _lexical_ids(session, query, self._overfetch)
-            fused = reciprocal_rank_fusion([semantic, lexical], limit=query.limit)
+            rankings = [semantic, lexical]
+            if self._bm25:
+                rankings.append(await _bm25_ids(session, query, self._overfetch))
+            fused = reciprocal_rank_fusion(rankings, limit=query.limit)
             if not fused:
                 return ()
             rows = {
@@ -131,6 +137,28 @@ async def _semantic_ids(
         .limit(limit)
     )
     return tuple(ChunkId(row) for row in rows)
+
+
+async def _has_bm25(session: AsyncSession) -> bool:
+    """ParadeDB is optional; the plain-Postgres deployment keeps the two-list fusion."""
+    found = await session.scalar(
+        text("SELECT count(*) FROM pg_extension WHERE extname = 'pg_search'")
+    )
+    return bool(found)
+
+
+async def _bm25_ids(
+    session: AsyncSession, query: SearchQuery, limit: int
+) -> tuple[ChunkId, ...]:
+    score = func.pdb.score(ChunkRow.id).label("score")
+    rows = await session.execute(
+        _filtered(query)
+        .with_only_columns(ChunkRow.id, score)
+        .where(ChunkRow.text.op("@@@")(query.text))
+        .order_by(score.desc())
+        .limit(limit)
+    )
+    return tuple(ChunkId(row.id) for row in rows)
 
 
 async def _lexical_ids(
