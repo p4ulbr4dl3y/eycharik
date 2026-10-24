@@ -76,6 +76,26 @@ test.describe("a recruiter's session", () => {
 });
 
 test.describe("an hr session", () => {
+  test("opens a document, edits it, and waits for re-indexing", async ({ page }) => {
+    await signIn(page, HR);
+    await nav(page, "Знания");
+    await page.getByRole("button", { name: /Открыть документ Отпуска и отгулы/ }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("hr/leave-policy")).toBeVisible();
+
+    await dialog.getByRole("button", { name: "Редактировать" }).click();
+    const editor = dialog.getByLabel("Markdown с frontmatter");
+    const source = await editor.inputValue();
+    await editor.fill(`${source}\n\nПроверка редактирования.`);
+    await dialog.getByRole("button", { name: "Сохранить и переиндексировать" }).click();
+
+    await expect(dialog.getByText("Документ обновлён и переиндексирован.")).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
   test("offboards in two steps and comes back to the list", async ({ page }) => {
     await signIn(page, HR);
     await nav(page, "Сотрудники");

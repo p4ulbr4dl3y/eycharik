@@ -131,6 +131,8 @@ class PostgresKnowledgeWriter:
                     valid_from=record.valid_from,
                     valid_to=record.valid_to,
                     checksum=record.checksum,
+                    body=record.body,
+                    updated_at=func.now(),
                 )
                 .on_conflict_do_update(
                     index_elements=[DocumentRow.id],
@@ -143,6 +145,8 @@ class PostgresKnowledgeWriter:
                         "valid_from": record.valid_from,
                         "valid_to": record.valid_to,
                         "checksum": record.checksum,
+                        "body": record.body,
+                        "updated_at": func.now(),
                     },
                 )
             )

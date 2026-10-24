@@ -86,6 +86,23 @@ async def test_a_document_without_frontmatter_is_refused_before_the_queue() -> N
     assert submitter.calls == []
 
 
+async def test_an_edit_must_keep_the_document_id() -> None:
+    use_case, submitter, _ = service()
+
+    with pytest.raises(KnowledgeRejectedError, match="expected"):
+        await use_case.markdown(FRONTMATTER, actor="hr@example.com", expected_id="hr/other")
+    assert submitter.calls == []
+
+
+async def test_an_edit_is_audited_as_an_update() -> None:
+    use_case, submitter, audit = service()
+
+    await use_case.markdown(FRONTMATTER, actor="hr@example.com", expected_id="hr/new-policy")
+
+    assert submitter.calls[0]["metadata"]["id"] == "hr/new-policy"
+    assert audit.events[0][0] == "knowledge_updated"
+
+
 async def test_a_non_active_document_is_refused() -> None:
     use_case, submitter, _ = service()
 

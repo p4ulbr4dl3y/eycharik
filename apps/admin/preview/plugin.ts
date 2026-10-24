@@ -207,6 +207,38 @@ async function handle(
     return;
   }
 
+  if (request.method === "GET" && path.startsWith("/admin/api/knowledge/")) {
+    const id = decodeURIComponent(path.slice("/admin/api/knowledge/".length));
+    const document = demo.knowledgeDocument(id, role);
+    if (!document) {
+      send(response, 404, { detail: "document not found", code: "not_found" });
+      return;
+    }
+    send(response, 200, document);
+    return;
+  }
+
+  if (
+    request.method === "PUT" &&
+    path.startsWith("/admin/api/knowledge/") &&
+    !path.startsWith("/admin/api/knowledge/files/")
+  ) {
+    if (role !== "hr_admin") {
+      send(response, 403, { detail: "only hr_admin may change the knowledge base", code: "forbidden" });
+      return;
+    }
+    const id = decodeURIComponent(path.slice("/admin/api/knowledge/".length));
+    const body = (await readJson(request)) as { text?: unknown } | null;
+    const text = typeof body?.text === "string" ? body.text : "";
+    if (text.length < 20) {
+      send(response, 422, { detail: "upload: text is required", code: "knowledge_rejected" });
+      return;
+    }
+    const result = demo.updateDocument(id, text);
+    send(response, result.status, result.body);
+    return;
+  }
+
   if (request.method === "POST" && path === "/admin/api/knowledge") {
     if (role !== "hr_admin") {
       send(response, 403, { detail: "only hr_admin may change the knowledge base", code: "forbidden" });

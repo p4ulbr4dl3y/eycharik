@@ -9,6 +9,7 @@ import {
   type FileMetadata,
 } from "../api";
 import { ErrorNote } from "../components/States";
+import { KnowledgeDocumentDialog } from "../components/KnowledgeDocumentDialog";
 import { useUnauthorized } from "../useUnauthorized";
 import { useSession } from "../session";
 import { countLabel, formatDateTime } from "../format";
@@ -34,6 +35,7 @@ export function KnowledgePage({ onUnauthorized }: { onUnauthorized: () => void }
   const canWrite = can("knowledge.write");
   const [text, setText] = useState("");
   const [hash, setHash] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ["knowledge"],
     queryFn: fetchKnowledge,
@@ -71,7 +73,8 @@ export function KnowledgePage({ onUnauthorized }: { onUnauthorized: () => void }
           <h1>База знаний</h1>
           <p className="muted">
             HR загружает документ с frontmatter, ассистент сразу отвечает по нему со ссылкой.
-            Изменения фиксируются в аудите.
+            Нажмите на документ, чтобы прочитать его; HR может изменить текст. Изменения
+            фиксируются в аудите.
           </p>
         </div>
         <div className="page-count" aria-live="polite">
@@ -163,23 +166,40 @@ export function KnowledgePage({ onUnauthorized }: { onUnauthorized: () => void }
             <ul className="knowledge">
               {query.data.items.map((item) => (
                 <li key={item.id} className="knowledge-row">
-                  <div className="knowledge-main">
-                    <strong>{item.title}</strong>
-                    <p className="digest-meta">
-                      <code>{item.id}</code>
-                      <span aria-hidden="true">·</span>
-                      <span>{item.audience.join(", ")}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>owner {item.owner}</span>
-                    </p>
-                  </div>
-                  <span className="digest-meta">{formatDateTime(item.updated_at)}</span>
+                  <button
+                    type="button"
+                    className="knowledge-open"
+                    onClick={() => setSelectedId(item.id)}
+                    aria-label={`Открыть документ ${item.title}`}
+                  >
+                    <span className="knowledge-main">
+                      <strong>{item.title}</strong>
+                      <span className="digest-meta">
+                        <code>{item.id}</code>
+                        <span aria-hidden="true">·</span>
+                        <span>{item.audience.join(", ")}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>owner {item.owner}</span>
+                      </span>
+                    </span>
+                    <span className="digest-meta">{formatDateTime(item.updated_at)}</span>
+                  </button>
                 </li>
               ))}
             </ul>
           ) : null}
         </section>
       </div>
+
+      {selectedId ? (
+        <KnowledgeDocumentDialog
+          key={selectedId}
+          documentId={selectedId}
+          canWrite={canWrite}
+          onClose={() => setSelectedId(null)}
+          onUnauthorized={onUnauthorized}
+        />
+      ) : null}
     </section>
   );
 }

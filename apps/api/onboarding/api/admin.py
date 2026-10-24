@@ -51,6 +51,7 @@ from onboarding.api.schemas import (
     EmployeesBulk,
     EmployeeUpdate,
     KnowledgeDocument,
+    KnowledgeDocumentDetail,
     KnowledgeExtraction,
     KnowledgeFileQueued,
     KnowledgeList,
@@ -787,3 +788,61 @@ async def extraction_status(
         min_confidence=record.min_confidence,
         document_id=record.document_id,
     )
+
+
+@router.get("/knowledge/{document_id:path}", response_model=KnowledgeDocumentDetail)
+async def knowledge_document(
+    request: Request, principal: Admin, document_id: str
+) -> KnowledgeDocumentDetail:
+    """One active document, including the raw markdown the cabinet may edit.
+
+    The route uses a path converter because document ids are namespaced (``hr/leave-policy``).
+    An ``hr_only`` document is a 404 for a non-HR caller, exactly like a missing one.
+    """
+    record = await request.app.state.container.admin.knowledge_document(
+        document_id, include_hr_only=principal.is_hr
+    )
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+    return KnowledgeDocumentDetail(
+        id=record.id,
+        title=record.title,
+        type=record.type,
+        audience=list(record.audience),
+        owner=record.owner,
+        valid_from=record.valid_from,
+        valid_to=record.valid_to,
+        updated_at=record.updated_at,
+        text=record.body,
+    )
+
+
+@router.put(
+    "/knowledge/{document_id:path}",
+    response_model=KnowledgeFileQueued,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def update_knowledge(
+    request: Request,
+    principal: Admin,
+    document_id: str,
+    body: KnowledgeUpload,
+) -> KnowledgeFileQueued:
+    """Replace one document's markdown and queue re-indexing.
+
+    The frontmatter is validated by the same use case as an upload, and its ``id`` must stay equal
+    to the path id: an edit changes a document, it does not create a second one under a new key.
+    """
+    if not principal.is_hr:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="only hr_admin may change the knowledge base",
+        )
+    container = request.app.state.container
+    existing = await container.admin.knowledge_document(document_id, include_hr_only=True)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="document not found")
+    submission = await container.admin.submit_markdown(
+        body.text, actor=principal.subject, expected_id=document_id
+    )
+    return KnowledgeFileQueued(content_hash=submission.content_hash, status="queued")

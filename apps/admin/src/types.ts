@@ -121,6 +121,11 @@ export interface KnowledgeDocument {
   updated_at: string;
 }
 
+/** The list shape plus the raw markdown. `text` is null for rows indexed before 0015. */
+export interface KnowledgeDocumentDetail extends KnowledgeDocument {
+  text: string | null;
+}
+
 export type Capability =
   | "runs.read"
   | "questions.read"

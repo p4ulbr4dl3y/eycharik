@@ -250,6 +250,10 @@ class DocumentRow(Base):
     valid_from: Mapped[date | None] = mapped_column(Date)
     valid_to: Mapped[date | None] = mapped_column(Date)
     checksum: Mapped[str] = mapped_column(String(64))
+    # The exact markdown the index was built from, frontmatter included. It is nullable because
+    # rows indexed before 0015 have no copy; a re-index fills it, and the cabinet says "unavailable"
+    # instead of pretending an editable document exists.
+    body: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

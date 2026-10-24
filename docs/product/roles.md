@@ -11,7 +11,7 @@
 | Resolve an escalation | no | own pipeline | own department | all |
 | Read `audience: hr_only` documents | no | no | no | yes |
 | Add or correct a directory row | no | no | no | yes |
-| Upload knowledge documents | no | no | no | yes |
+| Upload and edit knowledge documents | no | no | no | yes |
 | Edit scenarios and prompts | no | no | no | via review only |
 | Read metrics | no | own pipeline | own department | all |
 

@@ -347,6 +347,9 @@ class KnowledgeDocumentRecord:
     valid_to: date | None
     owner: str
     checksum: str
+    # Raw markdown with frontmatter. Optional so older callers and rows stay valid; the ingestion
+    # pipeline always supplies it when it has the source text.
+    body: str | None = None
 
 
 @runtime_checkable

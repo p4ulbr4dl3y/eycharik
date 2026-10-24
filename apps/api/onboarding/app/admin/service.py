@@ -261,6 +261,13 @@ class AdminService:
     ) -> tuple[KnowledgeRecord, ...]:
         return await self._queries.knowledge(limit=limit, include_hr_only=include_hr_only)
 
+    async def knowledge_document(
+        self, document_id: str, *, include_hr_only: bool
+    ) -> KnowledgeRecord | None:
+        return await self._queries.knowledge_document(
+            document_id, include_hr_only=include_hr_only
+        )
+
     # --- commands ----------------------------------------------------------
 
     async def create_employee(self, fields: EmployeeFields, *, actor: str) -> EmployeeRecord:
@@ -330,8 +337,10 @@ class AdminService:
     async def extraction(self, content_hash: str) -> ExtractionRecord | None:
         return await self._extractions.load_latest(content_hash)
 
-    async def submit_markdown(self, text: str, *, actor: str) -> KnowledgeSubmission:
-        return await self._knowledge.markdown(text, actor=actor)
+    async def submit_markdown(
+        self, text: str, *, actor: str, expected_id: str | None = None
+    ) -> KnowledgeSubmission:
+        return await self._knowledge.markdown(text, actor=actor, expected_id=expected_id)
 
     async def submit_file(
         self,

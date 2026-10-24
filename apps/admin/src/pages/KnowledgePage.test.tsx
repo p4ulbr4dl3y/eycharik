@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   fetchExtraction,
   fetchKnowledge,
+  fetchKnowledgeDocument,
+  updateKnowledge,
   uploadKnowledge,
   uploadKnowledgeFile,
 } from "../api";
@@ -15,6 +17,8 @@ import { KnowledgePage } from "./KnowledgePage";
 
 vi.mock("../api", () => ({
   fetchKnowledge: vi.fn(),
+  fetchKnowledgeDocument: vi.fn(),
+  updateKnowledge: vi.fn(),
   uploadKnowledge: vi.fn(),
   uploadKnowledgeFile: vi.fn(),
   fetchExtraction: vi.fn(),
@@ -44,9 +48,74 @@ function renderPage(capabilities: Capability[]) {
 describe("KnowledgePage", () => {
   beforeEach(() => {
     vi.mocked(fetchKnowledge).mockResolvedValue({ items: [] });
+    vi.mocked(fetchKnowledgeDocument).mockReset();
+    vi.mocked(updateKnowledge).mockReset();
     vi.mocked(uploadKnowledgeFile).mockReset();
     vi.mocked(fetchExtraction).mockReset();
     vi.mocked(uploadKnowledge).mockReset();
+  });
+
+  it("opens an active document and lets HR edit it", async () => {
+    const source = "---\nid: hr/leave-policy\ntitle: Отпуска\n---\n\n## Отпуск\n\nДвадцать восемь дней.";
+    vi.mocked(fetchKnowledge).mockResolvedValue({
+      items: [
+        {
+          id: "hr/leave-policy",
+          title: "Отпуска и отгулы",
+          type: "knowledge",
+          audience: ["all"],
+          owner: "hr",
+          valid_from: "2026-01-01",
+          valid_to: null,
+          updated_at: "2026-10-23T08:00:00Z",
+        },
+      ],
+    });
+    vi.mocked(fetchKnowledgeDocument).mockResolvedValue({
+      id: "hr/leave-policy",
+      title: "Отпуска и отгулы",
+      type: "knowledge",
+      audience: ["all"],
+      owner: "hr",
+      valid_from: "2026-01-01",
+      valid_to: null,
+      updated_at: "2026-10-23T08:00:00Z",
+      text: source,
+    });
+    vi.mocked(updateKnowledge).mockResolvedValue({ content_hash: "hash-edit", status: "queued" });
+    vi.mocked(fetchExtraction).mockResolvedValue({
+      content_hash: "hash-edit",
+      status: "indexed",
+      reason: null,
+      engine: "markdown",
+      route: "text",
+      pages: 0,
+      min_confidence: 1,
+      document_id: "hr/leave-policy",
+    });
+
+    renderPage(["knowledge.read", "knowledge.write"]);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Открыть документ Отпуска и отгулы" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText("hr/leave-policy")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Редактировать" }));
+    const editor = within(dialog).getByLabelText("Markdown с frontmatter");
+    expect(editor).toHaveValue(source);
+
+    await userEvent.clear(editor);
+    await userEvent.type(editor, `${source}\n\nИзменённый текст.`);
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить и переиндексировать" }));
+
+    expect(await screen.findByText("Документ обновлён и переиндексирован.")).toBeInTheDocument();
+    expect(updateKnowledge).toHaveBeenCalledWith(
+      "hr/leave-policy",
+      expect.stringContaining("Изменённый текст."),
+    );
   });
 
   it("hides both write forms from a role that may only read", async () => {

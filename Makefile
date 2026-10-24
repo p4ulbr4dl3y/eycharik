@@ -4,7 +4,7 @@ PY := uv run
 
 .DEFAULT_GOAL := check
 
-.PHONY: install check lint types arch test eval eval-retrieval eval-ocr eval-sentiment eval-lint eval-baseline eval-acl run worker up down logs migrate ingest seed demo fmt docs admin-install admin-dev admin-build admin-check admin-e2e prod-config prod-up smoke deploy-remote backup restore
+.PHONY: install check lint types arch test eval eval-retrieval eval-ocr eval-sentiment eval-lint eval-baseline eval-acl run worker up down logs migrate ingest seed demo demo-data demo-data-del fmt docs admin-install admin-dev admin-build admin-check admin-e2e prod-config prod-up smoke deploy-remote backup restore
 
 install:
 	uv sync
@@ -100,8 +100,15 @@ ingest:
 seed:
 	$(PY) python -m onboarding.cli seed --file infra/demo/employees.json
 
-demo: ingest
-	$(PY) python -m onboarding.cli demo --reset --yes
+demo-data:
+	docker compose run --rm api python -m onboarding.cli ingest
+	docker compose run --rm api python -m onboarding.cli demo --reset --yes
+
+demo: demo-data
+
+demo-data-del:
+	docker compose up -d postgres
+	docker compose exec -T postgres psql -U onboarding -d onboarding -v ON_ERROR_STOP=1 < scripts/demo-data-del.sql
 
 docs:
 	$(PY) python scripts/check_docs.py

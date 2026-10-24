@@ -29,6 +29,7 @@ from this table. If a question is not answered here, the answer does not exist y
 | What are the onboarding scenarios? | [product/scenarios.md](product/scenarios.md) |
 | Which mascot image belongs to which step? | [product/scenario-images.md](product/scenario-images.md) |
 | How do I demo this in five minutes? | [product/demo-script.md](product/demo-script.md) |
+| How do we defend the project to organizers? | [product/defense.md](product/defense.md) |
 | Who may see what? | [product/roles.md](product/roles.md) |
 | Why is the code split into core and app? | [decisions/0001-functional-core.md](decisions/0001-functional-core.md) |
 | Why does the webhook answer before doing work? | [decisions/0002-async-webhook.md](decisions/0002-async-webhook.md) |

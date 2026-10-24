@@ -3,9 +3,12 @@
 /* ---------- gate ---------- */
 
 .gate {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   display: grid;
   place-items: center;
+  overflow-y: auto;
   padding: 24px;
   background: var(--bg);
 }

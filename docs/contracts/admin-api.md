@@ -76,7 +76,9 @@ cookie exists at all.
 | `GET` | `/admin/api/v1/analytics/overview` | seven-day counts: runs, risk levels, unanswered questions, top risk tags |
 | `GET` | `/admin/api/v1/digest/weekly?days=7` | signals that deserve a human, one row per employee and step |
 | `GET` | `/admin/api/v1/knowledge?limit=100` | active knowledge documents, newest first; `hr_only` is hidden from every non-HR role |
+| `GET` | `/admin/api/v1/knowledge/{document_id:path}` | one active document with its source markdown; `hr_only` is a `404` for a non-HR role |
 | `POST` | `/admin/api/v1/knowledge` | HR uploads one markdown document; stored by content hash and queued for indexing |
+| `PUT` | `/admin/api/v1/knowledge/{document_id:path}` | HR replaces one document's markdown; the id must stay the same and re-indexing is queued |
 | `POST` | `/admin/api/v1/knowledge/files` | HR uploads a PDF or a deck; stored by content hash and queued for extraction |
 | `GET` | `/admin/api/v1/knowledge/files/{content_hash}` | what extraction decided about that file, refusals included |
 | `GET` | `/healthz`, `/readyz` | liveness and readiness, no auth |
@@ -376,6 +378,27 @@ A manager sees the same shape, scoped to one department.
 }
 ```
 
+`KnowledgeDocumentDetail` is the same shape plus the exact source markdown:
+
+```json
+{
+  "id": "hr/leave-policy",
+  "title": "Отпуска и отгулы",
+  "type": "knowledge",
+  "audience": ["all"],
+  "owner": "hr",
+  "valid_from": "2026-01-01",
+  "valid_to": null,
+  "updated_at": "2026-10-23T08:00:00Z",
+  "text": "---\nid: hr/leave-policy\n...\n---\n\n## Отпуск\n..."
+}
+```
+
+`text` is nullable: rows indexed before revision `0015_document_body` have no stored source until
+they are re-indexed. The cabinet says so and does not offer editing; it never reconstructs a
+document from chunks. Document ids contain slashes, so the route uses a path parameter:
+`GET /admin/api/v1/knowledge/hr/leave-policy`.
+
 `POST /admin/api/knowledge` takes `{"text": "<markdown with frontmatter>"}` and answers `202`:
 
 ```json
@@ -389,6 +412,13 @@ or manager answers `403`. The bytes are content-addressed, the extraction row be
 an `index_document` job is enqueued in the same transaction. The worker embeds and writes the
 chunks; the cabinet polls `GET /admin/api/knowledge/files/{content_hash}` for the result. A
 successful acceptance is audited as `knowledge_queued` with the document id and the subject.
+
+`PUT /admin/api/v1/knowledge/{document_id}` takes the same `{"text": ...}` body and answers `202`
+with the same queued shape. The document must exist and be active (`404` otherwise); only
+`hr_admin` may edit (`403` otherwise); the frontmatter is validated exactly as on upload. The
+frontmatter `id` must equal the path id — an edit replaces one document instead of silently
+creating another. A successful edit is audited as `knowledge_updated`, and the old chunks remain
+retrievable until the worker replaces them atomically.
 
 ### Files
 
@@ -502,8 +532,8 @@ A new code is an additive change. A code that disappears or changes meaning is a
 ## Rules
 
 - Mutations are the directory writes, the identity link, the question assignment and resolution,
-  the offboarding, and the two knowledge uploads. The cabinet never talks to MAX directly: every
-  outbound message is an outbox row.
+  the offboarding, and the knowledge uploads and edits. The cabinet never talks to MAX directly:
+  every outbound message is an outbox row.
 - A directory write names its actor in the audit log and never touches a run. Starting or restarting
   a run is a scenario/timer decision, not a directory edit.
 - Only `hr_admin` may upload a file; a recruiter or manager answers `403`. A format other than PDF

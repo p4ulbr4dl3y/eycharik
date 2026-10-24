@@ -234,6 +234,25 @@ interface KnowledgeFixture {
   audience: string[];
   owner: string;
   updated_days: number;
+  text?: string;
+}
+
+/** A demo source document for a fixture that has not been edited in this browser session. */
+function sourceText(item: KnowledgeFixture): string {
+  return `---
+id: ${item.id}
+title: ${item.title}
+type: knowledge
+status: active
+owner: ${item.owner}
+audience: [${item.audience.join(", ")}]
+valid_from: 2026-01-01
+---
+
+## ${item.title}
+
+Демонстрационный документ. В реальном кабинете здесь лежит markdown, по которому
+ассистент отвечает сотрудникам.`;
 }
 
 const KNOWLEDGE: KnowledgeFixture[] = [
@@ -452,6 +471,38 @@ export function knowledge(role: Role) {
       }))
       .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)),
   };
+}
+
+export function knowledgeDocument(id: string, role: Role) {
+  const item = KNOWLEDGE.find((candidate) => candidate.id === id);
+  if (!item) return null;
+  if (role !== "hr_admin" && item.audience.includes("hr_only")) return null;
+  return {
+    id: item.id,
+    title: item.title,
+    type: "knowledge",
+    audience: item.audience,
+    owner: item.owner,
+    valid_from: "2026-01-01",
+    valid_to: null,
+    updated_at: ago(item.updated_days),
+    text: item.text ?? sourceText(item),
+  };
+}
+
+export function updateDocument(id: string, text: string) {
+  const item = KNOWLEDGE.find((candidate) => candidate.id === id);
+  if (!item) return { status: 404, body: { detail: "document not found", code: "not_found" } };
+  const declared = /^---\s*\n[\s\S]*?^id:\s*(.+)$/m.exec(text)?.[1]?.trim();
+  if (declared !== id) {
+    return {
+      status: 422,
+      body: { detail: `upload: frontmatter id is '${declared ?? ""}', expected '${id}'`, code: "knowledge_rejected" },
+    };
+  }
+  item.text = text;
+  item.updated_days = 0;
+  return { status: 202, body: { content_hash: `demo-edit-${Date.now()}`, status: "queued" } };
 }
 
 function frontmatter(text: string, name: string): string | undefined {

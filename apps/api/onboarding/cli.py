@@ -273,7 +273,7 @@ async def _demo(settings: Settings, *, reset: bool, assume_yes: bool) -> int:
             directory=directory,
             employee_id=EmployeeId("1001"),
             chat_id=ChatId(1001),
-            text="Сколько дней больничного оплачивает компания?",
+            text="Кто мой наставник?",
             now=now,
             expect_escalated=True,
         )

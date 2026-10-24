@@ -25,26 +25,93 @@ Built for the "AI assistant in MAX" case (ООО «Группа ПОЛИПЛАС
 | Where does a fact live? | `docs/README.md` |
 | What is the bot allowed to answer? | `docs/product/answer-policy.md` |
 
+## Docker Compose: empty, demo, empty again
+
+`docker compose up -d --build` starts PostgreSQL, migrations, the API, the worker, and the static
+cabinet. It deliberately seeds nothing: the database is empty, so after login the cabinet shows
+zero counts and empty lists.
+
+Open <http://localhost:3000> and sign in with `dev-hr-token` (or `dev-recruiter-token` for the
+scoped recruiter view).
+
+The compose defaults are the local offline profile (extractive answers, hashing embeddings) and the
+demo admin tokens. No `.env` is required for this empty/demo flow. For real models and MAX, copy
+`.env.example` to `.env` and set the keys.
+
+### Fill with demo data
+
+From the repository root:
+
+```bash
+make demo-data
+```
+
+If `make` is not installed (common on Windows), use the wrapper:
+
+```powershell
+.\demo-data.cmd
+```
+
+Both run `ingest` and the demo seed inside the API image, so they need Docker Compose but not a
+local Python environment. The seed creates three employees, their runs and risks, three questions,
+and indexes `knowledge/`.
+
+### Remove demo data
+
+```bash
+make demo-data-del
+```
+
+On Windows without `make`:
+
+```powershell
+.\demo-data-del.cmd
+```
+
+Both truncate the runtime tables, delete the demo employees `1001`–`1003`, and clear the indexed
+knowledge (the SQL lives in `scripts/demo-data-del.sql`). The cabinet returns to the empty state.
+This is a local/demo reset: it also removes knowledge documents and runtime rows, so do not run it
+against data you care about.
+
+### Full reset
+
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
+`-v` drops the PostgreSQL volume; the next start is empty again. Migrations run automatically.
+
+If `make` is not installed, the fill command is:
+
+```bash
+docker compose run --rm api python -m onboarding.cli ingest
+docker compose run --rm api python -m onboarding.cli demo --reset --yes
+```
+
 ## Quick commands
 
 ```bash
-make install      # create the virtual environment
-make check        # ruff, mypy, import contracts, unit tests, docs links, admin
-make eval         # golden-set retrieval, generation, escalation
-make ingest       # index knowledge/ into pgvector
-make demo         # ingest + three employees, two real risk signals, three questions
-make run          # api with reload on :8000
-make worker       # job loop, outbox dispatcher, reminder tick
-make cron         # one scheduler pass for reminders and the outbox (crontab-friendly)
+make install       # create the virtual environment
+make check         # ruff, mypy, import contracts, unit tests, docs links, admin
+make eval          # golden-set retrieval, generation, escalation
+make ingest        # index knowledge/ into pgvector
+make demo-data     # docker compose: ingest + three employees, risks, three questions
+make demo-data-del # docker compose: return the cabinet to empty
+make run           # api with reload on :8000
+make worker        # job loop, outbox dispatcher, reminder tick
+make cron          # one scheduler pass for reminders and the outbox (crontab-friendly)
 make admin-install # cabinet dependencies
-make admin-dev    # recruiter cabinet on :5173
-make up           # postgres + migrate + api + worker + cabinet in docker
-make prod-config  # validate docker-compose.prod.yml with .env.prod
-make smoke        # public health, webhook, cabinet headers, metrics exposure
-make backup       # verified Postgres dump; BACKUP_S3_URI enables offsite upload
+make admin-dev     # recruiter cabinet on :5173
+make up            # postgres + migrate + api + worker + cabinet, no demo seed
+make prod-config   # validate docker-compose.prod.yml with .env.prod
+make smoke         # public health, webhook, cabinet headers, metrics exposure
+make backup        # verified Postgres dump; BACKUP_S3_URI enables offsite upload
 ```
 
 Offline demo in five minutes: [docs/product/demo-script.md](docs/product/demo-script.md).
+
+Defense script for organizers: [docs/product/defense.md](docs/product/defense.md).
 
 ## Status
 
@@ -67,7 +134,8 @@ Working end to end against a local Postgres with pgvector and a hosted model thr
   digest of the signals that need a human.
 - **Recruiter cabinet**: runs, per-employee detail with the audit timeline, question queue scoped by
   recruiter, manager (by department), or HR; a reply closes the question and leaves through the
-  outbox; HR can offboard an employee; knowledge upload for HR with frontmatter validation.
+  outbox; HR can offboard an employee; HR can upload, open, and edit a knowledge document with
+  frontmatter validation.
 - **Retention**: expired questions, uploads, outbox messages, and personal audit fields are purged
   hourly by the worker; `DATA_RETENTION_DAYS` is the policy knob; offboarding is immediate and
   audited. A claimed outbox row holds a lease, so a crashed worker loses no message.

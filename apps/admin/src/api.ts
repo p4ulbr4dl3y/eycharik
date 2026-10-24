@@ -3,6 +3,7 @@ import type {
   AnalyticsOverview,
   DigestResponse,
   KnowledgeDocument,
+  KnowledgeDocumentDetail,
   KnowledgeExtraction,
   KnowledgeFileQueued,
   ListResponse,
@@ -142,6 +143,26 @@ export function fetchDigest(days = 7): Promise<DigestResponse> {
 
 export function fetchKnowledge(): Promise<ListResponse<KnowledgeDocument>> {
   return request("/admin/api/v1/knowledge");
+}
+
+/** Document ids are namespaced (`hr/leave-policy`); encode each segment, keep the slashes. */
+function knowledgePath(id: string): string {
+  return id
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+export function fetchKnowledgeDocument(id: string): Promise<KnowledgeDocumentDetail> {
+  return request(`/admin/api/v1/knowledge/${knowledgePath(id)}`);
+}
+
+export function updateKnowledge(id: string, text: string): Promise<KnowledgeFileQueued> {
+  return request<KnowledgeFileQueued>(`/admin/api/v1/knowledge/${knowledgePath(id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
 }
 
 export function uploadKnowledge(text: string): Promise<KnowledgeFileQueued> {

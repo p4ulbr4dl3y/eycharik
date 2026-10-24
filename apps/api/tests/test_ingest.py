@@ -27,6 +27,13 @@ def test_every_document_has_an_owner_and_audience() -> None:
         assert item.document.audience
 
 
+def test_a_loaded_document_keeps_the_source_markdown() -> None:
+    item = load_corpus(KNOWLEDGE, SCHEMA)[0]
+
+    assert item.text.startswith("---\n")
+    assert item.document.text in item.text
+
+
 def test_missing_frontmatter_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "doc.md"
     path.write_text("# Без фронтматтера\n", encoding="utf-8")

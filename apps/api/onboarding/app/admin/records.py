@@ -109,6 +109,7 @@ class KnowledgeRecord:
     valid_from: date | None
     valid_to: date | None
     updated_at: datetime
+    body: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

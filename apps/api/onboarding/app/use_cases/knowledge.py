@@ -47,8 +47,19 @@ class SubmitKnowledge:
         self._schema = dict(schema)
         self._audit = audit
 
-    async def markdown(self, text: str, *, actor: str) -> KnowledgeSubmission:
+    async def markdown(
+        self,
+        text: str,
+        *,
+        actor: str,
+        expected_id: str | None = None,
+    ) -> KnowledgeSubmission:
         loaded = self._document(text, source="upload")
+        if expected_id is not None and str(loaded.document.id) != expected_id:
+            raise KnowledgeRejectedError(
+                "upload: frontmatter id is "
+                f"{str(loaded.document.id)!r}, expected {expected_id!r}"
+            )
         submission = await self._submitter.submit(
             content=text.encode("utf-8"),
             filename=f"{str(loaded.document.id).replace('/', '_')}.md",
@@ -58,7 +69,7 @@ class SubmitKnowledge:
             profile_hash=MARKDOWN_PROFILE_HASH,
         )
         await self._audit.record(
-            "knowledge_queued",
+            "knowledge_updated" if expected_id is not None else "knowledge_queued",
             document=str(loaded.document.id),
             title=loaded.document.title,
             by=actor,

@@ -30,6 +30,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY alembic.ini ./
 COPY apps ./apps
 COPY knowledge ./knowledge
+COPY infra/demo ./infra/demo
 COPY docs/prompts ./docs/prompts
 COPY docs/product ./docs/product
 COPY docs/contracts ./docs/contracts

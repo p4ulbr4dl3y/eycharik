@@ -44,6 +44,9 @@ class LoadedDocument:
     checksum: str
     status: str
     path: Path
+    # The source markdown, frontmatter included. The index only needs the body, but the cabinet
+    # edits the whole document, so the raw text is kept alongside the metadata.
+    text: str = ""
 
 
 def load_corpus(directory: Path, schema_path: Path) -> tuple[LoadedDocument, ...]:
@@ -132,6 +135,7 @@ def parse_document(text: str, schema: dict[str, Any], *, source: str) -> LoadedD
         checksum=hashlib.sha256(text.encode("utf-8")).hexdigest(),
         status=str(meta["status"]),
         path=Path(source),
+        text=text,
     )
 
 

@@ -1,6 +1,23 @@
 # Local and demo topology. One backend image, four roles, plus the static cabinet.
 name: onboarding
 
+# Local/demo defaults. A fresh compose stack is empty: migrations run, but nothing is seeded.
+# Run `make demo-data` to fill it and `make demo-data-del` to return to the empty state.
+# These are defaults only; an explicit .env or shell variable wins.
+x-local-demo: &local-demo
+  ENVIRONMENT: ${ENVIRONMENT:-local}
+  CHANNELS: ${CHANNELS:-max}
+  MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-demo-token}
+  MAX_WEBHOOK_SECRET: ${MAX_WEBHOOK_SECRET:-dev-secret}
+  LLM_PROVIDER: ${LLM_PROVIDER:-extractive}
+  EMBED_PROVIDER: ${EMBED_PROVIDER:-hashing}
+  EMBED_PROFILE: ${EMBED_PROFILE:-local-hashing}
+  EMBED_DIM: ${EMBED_DIM:-1024}
+  EXTRACTION_PROFILE: ${EXTRACTION_PROFILE:-native}
+  SENTIMENT_PROVIDER: ${SENTIMENT_PROVIDER:-prompt}
+  ADMIN_TOKENS: "${ADMIN_TOKENS:-dev-recruiter-token:recruiter:rec-1,dev-manager-token:manager:Коммерческий блок,dev-hr-token:hr_admin:hr-1:2030-12-31}"
+  DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-365}
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -25,11 +42,14 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *local-demo
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-onboarding}:${POSTGRES_PASSWORD:-onboarding}@postgres:5432/${POSTGRES_DB:-onboarding}
     depends_on:
       postgres:
         condition: service_healthy
     restart: "no"
+    healthcheck:
+      disable: true
 
   api:
     build: .
@@ -37,6 +57,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *local-demo
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-onboarding}:${POSTGRES_PASSWORD:-onboarding}@postgres:5432/${POSTGRES_DB:-onboarding}
     ports:
       - "8000:8000"
@@ -52,6 +73,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *local-demo
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-onboarding}:${POSTGRES_PASSWORD:-onboarding}@postgres:5432/${POSTGRES_DB:-onboarding}
     depends_on:
       migrate:

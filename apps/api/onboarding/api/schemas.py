@@ -345,6 +345,12 @@ class KnowledgeDocument(BaseModel):
     updated_at: datetime
 
 
+class KnowledgeDocumentDetail(KnowledgeDocument):
+    """The list shape plus the raw markdown the cabinet can show and edit."""
+
+    text: str | None
+
+
 class KnowledgeList(BaseModel):
     model_config = ConfigDict(frozen=True)
 

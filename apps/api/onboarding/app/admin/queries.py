@@ -237,6 +237,35 @@ class AdminQueries:
                 for row in rows
             )
 
+    async def knowledge_document(
+        self, document_id: str, *, include_hr_only: bool
+    ) -> KnowledgeRecord | None:
+        """One active document with its source markdown.
+
+        The same SQL scope as the list applies before the row is fetched. An ``hr_only`` document
+        therefore looks absent to a recruiter, not merely read-only.
+        """
+        async with self._database.session() as session:
+            statement = select(DocumentRow).where(
+                DocumentRow.id == document_id, DocumentRow.status == "active"
+            )
+            if not include_hr_only:
+                statement = statement.where(~DocumentRow.audience.contains(["hr_only"]))
+            row = await session.scalar(statement)
+            if row is None:
+                return None
+            return KnowledgeRecord(
+                id=row.id,
+                title=row.title,
+                type=row.type,
+                audience=tuple(row.audience),
+                owner=row.owner,
+                valid_from=row.valid_from,
+                valid_to=row.valid_to,
+                updated_at=row.updated_at,
+                body=row.body,
+            )
+
     async def overview(
         self, *, recruiter_id: str | None, department: str | None, since: datetime
     ) -> OverviewRecord:

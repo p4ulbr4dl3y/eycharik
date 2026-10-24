@@ -18,7 +18,8 @@ npm run e2e          # playwright against preview:demo, plus axe on every screen
 ```
 
 `npm run dev` is the real frontend: it needs the API and its PostgreSQL. `npm run preview:demo` is a
-design/review tool; see [Preview mode](#preview-mode).
+design/review tool; see [Preview mode](#preview-mode). For the full Docker Compose flow (empty
+database, `demo-data`, `demo-data-del`), see [`../../README.md`](../../README.md).
 
 ## Routes
 
@@ -31,7 +32,7 @@ The URL hash is the router; there is no router dependency.
 | `#/run/<run_id>` | Employee detail | Step, facts, questions, audit timeline |
 | `#/questions` | Questions | Queue by status and by owner (`&owner=me`, `&owner=unassigned`), reasons, citations, claim |
 | `#/risk` | Risks | Counters, weekly digest, risk topics |
-| `#/knowledge` | Knowledge | Upload a markdown document, list indexed documents |
+| `#/knowledge` | Knowledge | Upload, list, open and edit indexed documents |
 
 The default route is `#/overview`. The gate is shown before any route when the session cookie is
 missing or expired. Filters live in the query string (`#/questions?status=answered`), so a screen is
@@ -151,8 +152,12 @@ guess a shape in the client.
 | `PATCH /admin/api/questions/{id}/assignee` | `{ assignee }`: claim, hand over, or clear with `null` |
 | `GET /admin/api/analytics/overview` | Seven-day counters and `top_tags` |
 | `GET /admin/api/digest/weekly?days=7` | `{ items: DigestItem[], since }` |
-| `GET /admin/api/knowledge` | `{ items: KnowledgeDocument[] }` |
-| `POST /admin/api/knowledge` | `201 { id, title, chunks }`; `hr_admin` only |
+| `GET /admin/api/v1/knowledge` | `{ items: KnowledgeDocument[] }` |
+| `GET /admin/api/v1/knowledge/{document_id}` | `KnowledgeDocumentDetail`: metadata plus source `text`; `hr_only` is a `404` for non-HR |
+| `POST /admin/api/v1/knowledge` | `202 { content_hash, status }`; `hr_admin` only |
+| `PUT /admin/api/v1/knowledge/{document_id}` | `202 { content_hash, status }`; `hr_admin` only, frontmatter `id` must match |
+| `POST /admin/api/v1/knowledge/files` | `202 { content_hash, status }`; PDF/PPTX, `hr_admin` only |
+| `GET /admin/api/v1/knowledge/files/{content_hash}` | extraction status, refusal reason included |
 | `GET /healthz`, `/readyz` | Liveness/readiness, no auth |
 
 `limit` is bounded to `1..200`. There is no cursor pagination: the cabinet asks for the newest 50
@@ -163,8 +168,11 @@ recomputes them.
 
 ## Knowledge documents
 
-This is the only mutation available in the cabinet today. HR uploads markdown with YAML
-frontmatter; the API validates it, chunks it, and indexes it in the same request.
+HR uploads markdown with YAML frontmatter or a PDF/deck; the API validates the metadata and queues
+indexing in the worker. Clicking an active document in the cabinet opens the exact source markdown
+the index was built from. HR can edit it in place; saving validates the frontmatter, requires the
+same `id`, and queues a re-index. A re-index replaces the document's chunks atomically, so the old
+and new versions are never retrievable at the same time.
 
 ### Frontmatter
 
@@ -242,12 +250,11 @@ The preview fixtures mirror the documented cohort and use four documents:
 The real corpus lives in `knowledge/` and includes company policies, HR policies, and IT access
 instructions. Every file there also carries this frontmatter.
 
-### Known role-scoping gap
+### Role scoping
 
-`docs/product/roles.md` says only `hr_admin` may read `hr_only` documents. The current
-`GET /admin/api/knowledge` returns active documents without filtering by the caller's role. The
-preview filters them, but the real endpoint must be scoped before production. Until then, do not
-treat the knowledge list as an access control boundary.
+`GET /knowledge` and `GET /knowledge/{document_id}` apply the `hr_only` predicate in SQL. A
+recruiter opening an `hr_only` document gets a `404`, not a read-only view. Editing requires
+`knowledge.write`, which only `hr_admin` holds; the server re-checks the role on every `PUT`.
 
 ## Preview mode
 
@@ -292,6 +299,8 @@ Rules of the system:
   decorative glass; the sticky topbar uses a light blur only for legibility.
 - Numbers are tabular. Headings use tighter letter spacing; body text stays at 1.5 line height.
 - Charts are CSS bars and a segmented progress rail; no canvas, no chart dependency.
+- The shell is viewport-height on desktop. The content column is the only scroll container; the page
+  itself never scrolls, so the sidebar and the rounded top and bottom corners stay in place.
 - The sidebar is 248 px; below 1024 px it becomes an icon rail; below 760 px it becomes a fixed
   bottom navigation with the same five sections.
 - On mobile, long rows (name + reason pill + time) reflow to a two-line grid, and the body clips
@@ -329,6 +338,7 @@ on navigation, `aria-live` on counts, visible focus rings, and `prefers-reduced-
 | `src/styles/screens.css` | Runs, detail, risk, questions, knowledge, states |
 | `src/styles/responsive.css` | Breakpoints, reduced motion, print — always last |
 | `src/components/Icons.tsx` | Inline SVG icon set and logo mark |
+| `src/components/KnowledgeDocumentDialog.tsx` | Read and edit one active knowledge document |
 | `src/components/TokenGate.tsx` | Login by token |
 | `src/components/Boundary.tsx` | Keeps a crashed screen from becoming a white page; remounted per route so the shell survives |
 | `src/components/UpdateBanner.tsx` | Offline and stale-build strip above the shell |
@@ -340,7 +350,7 @@ on navigation, `aria-live` on counts, visible focus rings, and `prefers-reduced-
 | `src/pages/RunDetailPage.tsx` | Employee card and audit timeline |
 | `src/pages/QuestionsPage.tsx` | Question queue |
 | `src/pages/RiskPage.tsx` | Risk counters and weekly digest |
-| `src/pages/KnowledgePage.tsx` | Knowledge upload and list |
+| `src/pages/KnowledgePage.tsx` | Knowledge upload, list, document viewer/editor |
 | `src/pages/NotFoundPage.tsx` | An address the cabinet cannot read |
 | `preview/` | Dev-only API and fixtures; never in a production build |
 
